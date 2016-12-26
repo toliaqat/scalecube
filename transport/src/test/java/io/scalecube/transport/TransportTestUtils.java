@@ -29,14 +29,17 @@ public final class TransportTestUtils {
     return Transport.bindAwait(config);
   }
 
-  public static void destroyTransport(Transport transport) {
-    if (transport != null && !transport.isStopped()) {
-      CompletableFuture<Void> close = new CompletableFuture<>();
-      transport.stop(close);
-      try {
-        close.get(1, TimeUnit.SECONDS);
-      } catch (Exception ignore) {
-        LOGGER.warn("Failed to await transport termination");
+  public static void destroyTransport(Transport... transports) {
+    for (int i = 0; i < transports.length; i++) {
+      Transport transport = transports[i];
+      if (transport != null && !transport.isStopped()) {
+        CompletableFuture<Void> close = new CompletableFuture<>();
+        transport.stop(close);
+        try {
+          close.get(1, TimeUnit.SECONDS);
+        } catch (Exception ignore) {
+          LOGGER.warn("Failed to await transport termination");
+        }
       }
     }
   }

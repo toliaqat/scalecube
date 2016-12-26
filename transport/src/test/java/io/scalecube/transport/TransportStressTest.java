@@ -42,6 +42,7 @@ public class TransportStressTest extends BaseTest {
 
   // Maximum time to await for all responses
   private static final int timeoutSeconds = 60;
+  private static final int numOfClients = 8;
 
   @Parameterized.Parameters(name = "msgCount={0}")
   public static List<Object[]> data() {
@@ -58,7 +59,7 @@ public class TransportStressTest extends BaseTest {
   public void transportStressTest() throws Exception {
     // Init transports
     Transport echoServer = Transport.bindAwait();
-    Transport client1 = null;
+    Transport[] clients = new Transport[numOfClients];
 
     // Init measured params
     long sentTime = 0;
@@ -73,18 +74,22 @@ public class TransportStressTest extends BaseTest {
       // Init client
       CountDownLatch measureLatch = new CountDownLatch(msgCount);
       ArrayList<Long> rttRecords = new ArrayList<>(msgCount);
-      client1 = Transport.bindAwait();
-      client1.listen().subscribe(msg -> {
-        long sentAt = Long.valueOf(msg.data());
-        long rttTime = System.currentTimeMillis() - sentAt;
-        rttRecords.add(rttTime);
-        measureLatch.countDown();
-      });
+      for (int i = 0; i < clients.length; i++) {
+        clients[i] = Transport.bindAwait();
+        clients[i].listen().subscribe(msg -> {
+          long sentAt = Long.valueOf(msg.data());
+          long rttTime = System.currentTimeMillis() - sentAt;
+          rttRecords.add(rttTime);
+          measureLatch.countDown();
+        });
+      }
+
 
       // Measure
       long startAt = System.currentTimeMillis();
       for (int i = 0; i < msgCount; i++) {
-        client1.send(echoServer.address(), Message.fromData(Long.toString(System.currentTimeMillis())));
+        int clientIndex = i % clients.length;
+        clients[clientIndex].send(echoServer.address(), Message.fromData(Long.toString(System.currentTimeMillis())));
       }
       sentTime = System.currentTimeMillis() - startAt;
       measureLatch.await(timeoutSeconds, TimeUnit.SECONDS);
@@ -99,7 +104,7 @@ public class TransportStressTest extends BaseTest {
 
       // Destroy transport
       destroyTransport(echoServer);
-      destroyTransport(client1);
+      destroyTransport(clients);
     }
   }
 
@@ -108,7 +113,7 @@ public class TransportStressTest extends BaseTest {
     // Init transports
     TransportConfig config = TransportConfig.builder().useMsgListener(true).build();
     Transport echoServer = Transport.bindAwait(config);
-    Transport client1 = null;
+    Transport[] clients = new Transport[numOfClients];
 
     // Init measured params
     long sentTime = 0;
@@ -123,18 +128,21 @@ public class TransportStressTest extends BaseTest {
       // Init client
       CountDownLatch measureLatch = new CountDownLatch(msgCount);
       ArrayList<Long> rttRecords = new ArrayList<>(msgCount);
-      client1 = Transport.bindAwait(config);
-      client1.listen(msg -> {
-        long sentAt = Long.valueOf(msg.data());
-        long rttTime = System.currentTimeMillis() - sentAt;
-        rttRecords.add(rttTime);
-        measureLatch.countDown();
-      });
+      for (int i = 0; i < clients.length; i++) {
+        clients[i] = Transport.bindAwait(config);
+        clients[i].listen(msg -> {
+          long sentAt = Long.valueOf(msg.data());
+          long rttTime = System.currentTimeMillis() - sentAt;
+          rttRecords.add(rttTime);
+          measureLatch.countDown();
+        });
+      }
 
       // Measure
       long startAt = System.currentTimeMillis();
       for (int i = 0; i < msgCount; i++) {
-        client1.send(echoServer.address(), Message.fromData(Long.toString(System.currentTimeMillis())));
+        int clientIndex = i % clients.length;
+        clients[clientIndex].send(echoServer.address(), Message.fromData(Long.toString(System.currentTimeMillis())));
       }
       sentTime = System.currentTimeMillis() - startAt;
       measureLatch.await(timeoutSeconds, TimeUnit.SECONDS);
@@ -149,7 +157,7 @@ public class TransportStressTest extends BaseTest {
 
       // Destroy transport
       destroyTransport(echoServer);
-      destroyTransport(client1);
+      destroyTransport(clients);
     }
   }
 
