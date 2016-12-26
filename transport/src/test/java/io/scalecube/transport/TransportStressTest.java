@@ -1,5 +1,6 @@
 package io.scalecube.transport;
 
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -11,6 +12,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.LongSummaryStatistics;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import io.scalecube.testlib.BaseTest;
@@ -30,19 +34,19 @@ public class TransportStressTest extends BaseTest {
       // Msg count
       {     1_000 }, // warm up
       {     1_000 },
-      {     5_000 },
+//      {     5_000 },
       {    10_000 },
-      {    25_000 },
-      {    50_000 },
+//      {    25_000 },
+//      {    50_000 },
       {   100_000 },
-      {   250_000 },
-      {   500_000 },
+//      {   250_000 },
+//      {   500_000 },
       { 1_000_000 },
   });
 
   // Maximum time to await for all responses
   private static final int timeoutSeconds = 60;
-  private static final int numOfClients = 8;
+  private static final int numOfClients = 4;
 
   @Parameterized.Parameters(name = "msgCount={0}")
   public static List<Object[]> data() {
@@ -60,6 +64,7 @@ public class TransportStressTest extends BaseTest {
     // Init transports
     Transport echoServer = Transport.bindAwait();
     Transport[] clients = new Transport[numOfClients];
+    ExecutorService[] executors = new ExecutorService[numOfClients];
 
     // Init measured params
     long sentTime = 0;
@@ -82,15 +87,22 @@ public class TransportStressTest extends BaseTest {
           rttRecords.add(rttTime);
           measureLatch.countDown();
         });
+        executors[i] = Executors.newSingleThreadExecutor();
       }
 
 
       // Measure
       long startAt = System.currentTimeMillis();
-      for (int i = 0; i < msgCount; i++) {
-        int clientIndex = i % clients.length;
-        clients[clientIndex].send(echoServer.address(), Message.fromData(Long.toString(System.currentTimeMillis())));
+      for (int i = 0; i < numOfClients; i++) {
+        final int clientIndex = i;
+        executors[clientIndex].execute(() -> {
+          for (int j = 0; j < msgCount / numOfClients; j++) {
+            clients[clientIndex].send(echoServer.address(),
+                Message.fromData(Long.toString(System.currentTimeMillis())));
+          }
+        });
       }
+
       sentTime = System.currentTimeMillis() - startAt;
       measureLatch.await(timeoutSeconds, TimeUnit.SECONDS);
       receivedTime = System.currentTimeMillis() - startAt;
@@ -114,6 +126,7 @@ public class TransportStressTest extends BaseTest {
     TransportConfig config = TransportConfig.builder().useMsgListener(true).build();
     Transport echoServer = Transport.bindAwait(config);
     Transport[] clients = new Transport[numOfClients];
+    ExecutorService[] executors = new ExecutorService[numOfClients];
 
     // Init measured params
     long sentTime = 0;
@@ -136,13 +149,19 @@ public class TransportStressTest extends BaseTest {
           rttRecords.add(rttTime);
           measureLatch.countDown();
         });
+        executors[i] = Executors.newSingleThreadExecutor();
       }
 
       // Measure
       long startAt = System.currentTimeMillis();
-      for (int i = 0; i < msgCount; i++) {
-        int clientIndex = i % clients.length;
-        clients[clientIndex].send(echoServer.address(), Message.fromData(Long.toString(System.currentTimeMillis())));
+      for (int i = 0; i < numOfClients; i++) {
+        final int clientIndex = i;
+        executors[clientIndex].execute(() -> {
+          for (int j = 0; j < msgCount / numOfClients; j++) {
+            clients[clientIndex].send(echoServer.address(),
+                Message.fromData(Long.toString(System.currentTimeMillis())));
+          }
+        });
       }
       sentTime = System.currentTimeMillis() - startAt;
       measureLatch.await(timeoutSeconds, TimeUnit.SECONDS);
