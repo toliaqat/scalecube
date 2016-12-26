@@ -37,7 +37,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 
-final class TransportImpl implements Transport {
+final class TransportImpl implements Transport, MessageListener {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(TransportImpl.class);
   private static final CompletableFuture<Void> COMPLETED_PROMISE = CompletableFuture.completedFuture(null);
@@ -63,6 +63,8 @@ final class TransportImpl implements Transport {
   private Address address;
   private ServerChannel serverChannel;
 
+  private MessageListener messageListener;
+
   private volatile boolean stopped = false;
 
   TransportImpl(TransportConfig config) {
@@ -70,7 +72,11 @@ final class TransportImpl implements Transport {
     this.config = config;
     this.serializerHandler = new MessageSerializerHandler();
     this.deserializerHandler = new MessageDeserializerHandler();
-    this.messageHandler = new MessageHandler(incomingMessagesSubject);
+    if (config.isUseMsgListener()) {
+      this.messageHandler = new MessageHandler(null, this);
+    } else {
+      this.messageHandler = new MessageHandler(incomingMessagesSubject, null);
+    }
     this.bootstrapFactory = new BootstrapFactory(config);
   }
 
@@ -78,7 +84,9 @@ final class TransportImpl implements Transport {
    * Starts to accept connections on local address.
    */
   CompletableFuture<Transport> bind0() {
-    incomingMessagesSubject.subscribeOn(Schedulers.from(bootstrapFactory.getWorkerGroup()));
+    if (!config.isUseMsgListener()) {
+      incomingMessagesSubject.subscribeOn(Schedulers.from(bootstrapFactory.getWorkerGroup()));
+    }
 
     // Resolve listen IP address
     final InetAddress listenAddress =
@@ -150,7 +158,9 @@ final class TransportImpl implements Transport {
     stopped = true;
     // Complete incoming messages observable
     try {
-      incomingMessagesSubject.onCompleted();
+      if (!config.isUseMsgListener()) {
+        incomingMessagesSubject.onCompleted();
+      }
     } catch (Exception ignore) {
       // ignore
     }
@@ -182,7 +192,16 @@ final class TransportImpl implements Transport {
   @Override
   public final Observable<Message> listen() {
     checkState(!stopped, "Transport is stopped");
-    return incomingMessagesSubject.onBackpressureBuffer().asObservable();
+    if (!config.isUseMsgListener()) {
+      return incomingMessagesSubject.onBackpressureBuffer().asObservable();
+    } else {
+      return null;
+    }
+  }
+
+  @Override
+  public void listen(MessageListener messageListener) {
+    this.messageListener = messageListener;
   }
 
   @Override
@@ -253,6 +272,13 @@ final class TransportImpl implements Transport {
     });
 
     return connectFuture;
+  }
+
+  @Override
+  public void onMessage(Message message) {
+    if (messageListener != null) {
+      messageListener.onMessage(message);
+    }
   }
 
   @ChannelHandler.Sharable

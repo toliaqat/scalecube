@@ -120,6 +120,9 @@ public interface Transport {
   @Nonnull
   Observable<Message> listen();
 
+
+  void listen(MessageListener messageListener);
+
   /**
    * Returns network emulator associated with this instance of transport. It always returns non null instance
    * even if network emulator is disabled by transport config. In case when network emulator is disable all

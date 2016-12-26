@@ -33,6 +33,7 @@ public final class TransportConfig {
   private final boolean enableEpoll;
   private final int bossThreads;
   private final int workerThreads;
+  private final boolean useMsgListener;
 
   private TransportConfig(Builder builder) {
     this.listenAddress = builder.listenAddress;
@@ -46,6 +47,7 @@ public final class TransportConfig {
     this.enableEpoll = builder.enableEpoll;
     this.bossThreads = builder.bossThreads;
     this.workerThreads = builder.workerThreads;
+    this.useMsgListener = builder.useMsgListener;
   }
 
   public static TransportConfig defaultConfig() {
@@ -100,6 +102,10 @@ public final class TransportConfig {
     return workerThreads;
   }
 
+  public boolean isUseMsgListener() {
+    return useMsgListener;
+  }
+
   @Override
   public String toString() {
     return "TransportConfig{listenAddress=" + listenAddress
@@ -129,6 +135,8 @@ public final class TransportConfig {
     private boolean enableEpoll = DEFAULT_ENABLE_EPOLL;
     private int bossThreads = DEFAULT_BOSS_THREADS;
     private int workerThreads = DEFAULT_WORKER_THREADS;
+
+    private boolean useMsgListener = false;
 
     private Builder() {}
 
@@ -184,6 +192,11 @@ public final class TransportConfig {
 
     public Builder workerThreads(int workerThreads) {
       this.workerThreads = workerThreads;
+      return this;
+    }
+
+    public Builder useMsgListener(boolean useMsgListener) {
+      this.useMsgListener = useMsgListener;
       return this;
     }
 

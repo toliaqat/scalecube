@@ -19,9 +19,11 @@ final class MessageHandler extends ChannelInboundHandlerAdapter {
   private static final Logger LOGGER = LoggerFactory.getLogger(MessageHandler.class);
 
   private final Subject<Message, Message> incomingMessagesSubject;
+  private MessageListener messageListener;
 
-  MessageHandler(Subject<Message, Message> incomingMessagesSubject) {
+  MessageHandler(Subject<Message, Message> incomingMessagesSubject, MessageListener messageListener) {
     this.incomingMessagesSubject = incomingMessagesSubject;
+    this.messageListener = messageListener;
   }
 
   /**
@@ -33,6 +35,10 @@ final class MessageHandler extends ChannelInboundHandlerAdapter {
     if (LOGGER.isDebugEnabled()) {
       LOGGER.debug("Received: {}", message);
     }
-    incomingMessagesSubject.onNext(message);
+    if (messageListener != null) {
+      messageListener.onMessage(message);
+    } else {
+      incomingMessagesSubject.onNext(message);
+    }
   }
 }

@@ -33,11 +33,11 @@ public class TransportStressTest extends BaseTest {
       {     5_000 },
       {    10_000 },
       {    25_000 },
-//      {    50_000 },
-//      {   100_000 },
-//      {   250_000 },
-//      {   500_000 },
-//      { 1_000_000 },
+      {    50_000 },
+      {   100_000 },
+      {   250_000 },
+      {   500_000 },
+      { 1_000_000 },
   });
 
   // Maximum time to await for all responses
@@ -75,6 +75,56 @@ public class TransportStressTest extends BaseTest {
       ArrayList<Long> rttRecords = new ArrayList<>(msgCount);
       client1 = Transport.bindAwait();
       client1.listen().subscribe(msg -> {
+        long sentAt = Long.valueOf(msg.data());
+        long rttTime = System.currentTimeMillis() - sentAt;
+        rttRecords.add(rttTime);
+        measureLatch.countDown();
+      });
+
+      // Measure
+      long startAt = System.currentTimeMillis();
+      for (int i = 0; i < msgCount; i++) {
+        client1.send(echoServer.address(), Message.fromData(Long.toString(System.currentTimeMillis())));
+      }
+      sentTime = System.currentTimeMillis() - startAt;
+      measureLatch.await(timeoutSeconds, TimeUnit.SECONDS);
+      receivedTime = System.currentTimeMillis() - startAt;
+      rttStats = rttRecords.stream().mapToLong(v -> v).summaryStatistics();
+      assertTrue(measureLatch.getCount() == 0);
+    } finally {
+      // Print results
+      LOGGER.info("Finished sending {} messages in {} ms", msgCount, sentTime);
+      LOGGER.info("Finished receiving {} messages in {} ms", msgCount, receivedTime);
+      LOGGER.info("Round trip stats (ms): {}", rttStats);
+
+      // Destroy transport
+      destroyTransport(echoServer);
+      destroyTransport(client1);
+    }
+  }
+
+  @Test
+  public void transportStressTestWithoutObservables() throws Exception {
+    // Init transports
+    TransportConfig config = TransportConfig.builder().useMsgListener(true).build();
+    Transport echoServer = Transport.bindAwait(config);
+    Transport client1 = null;
+
+    // Init measured params
+    long sentTime = 0;
+    long receivedTime = 0;
+    LongSummaryStatistics rttStats = null;
+
+    // Run experiment
+    try {
+      // Subscribe echo server handler
+      echoServer.listen(msg -> echoServer.send(msg.sender(), msg));
+
+      // Init client
+      CountDownLatch measureLatch = new CountDownLatch(msgCount);
+      ArrayList<Long> rttRecords = new ArrayList<>(msgCount);
+      client1 = Transport.bindAwait(config);
+      client1.listen(msg -> {
         long sentAt = Long.valueOf(msg.data());
         long rttTime = System.currentTimeMillis() - sentAt;
         rttRecords.add(rttTime);
