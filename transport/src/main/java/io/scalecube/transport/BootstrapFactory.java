@@ -13,6 +13,7 @@ import io.netty.channel.epoll.EpollSocketChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.ServerSocketChannel;
 import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.concurrent.DefaultThreadFactory;
@@ -59,6 +60,16 @@ final class BootstrapFactory {
     this.workerGroup = createEventLoopGroup(config.getWorkerThreads(), new DefaultThreadFactory("sc-io", true));
   }
 
+  public Bootstrap bootstrap() {
+    Bootstrap bootstrap = new Bootstrap();
+    bootstrap.group(workerGroup)
+      .channel(NioDatagramChannel.class)
+      .option(ChannelOption.SO_REUSEADDR, true)
+      .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
+    
+    return bootstrap;
+  }
+  
   public ServerBootstrap serverBootstrap() {
     ServerBootstrap bootstrap = new ServerBootstrap();
     bootstrap.group(bossGroup, workerGroup)

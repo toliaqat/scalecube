@@ -6,6 +6,7 @@ import static com.google.common.base.Preconditions.checkState;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelFuture;
@@ -15,6 +16,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ServerChannel;
+import io.netty.channel.socket.DatagramPacket;
 import io.netty.handler.codec.MessageToByteEncoder;
 import io.netty.handler.codec.MessageToMessageDecoder;
 import io.netty.handler.codec.protobuf.ProtobufVarint32FrameDecoder;
@@ -30,6 +32,7 @@ import rx.subjects.Subject;
 
 import java.net.BindException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -46,6 +49,8 @@ final class TransportImpl implements Transport {
 
   private final Subject<Message, Message> incomingMessagesSubject = PublishSubject.<Message>create().toSerialized();
 
+  private final Subject<Message, Message> incomingUdpSubject = PublishSubject.<Message>create().toSerialized();
+  
   private final Map<Address, ChannelFuture> outgoingChannels = new ConcurrentHashMap<>();
 
   // Pipeline
@@ -64,6 +69,7 @@ final class TransportImpl implements Transport {
   private ServerChannel serverChannel;
 
   private volatile boolean stopped = false;
+  private UdpHandler udpHandler;
 
   public TransportImpl(TransportConfig config) {
     checkArgument(config != null);
@@ -71,8 +77,11 @@ final class TransportImpl implements Transport {
     this.serializerHandler = new MessageSerializerHandler();
     this.deserializerHandler = new MessageDeserializerHandler();
     this.messageHandler = new MessageHandler(incomingMessagesSubject);
+    this.udpHandler = new UdpHandler(incomingUdpSubject);
     this.bootstrapFactory = new BootstrapFactory(config);
   }
+
+
 
   /**
    * Starts to accept connections on local address.
@@ -113,9 +122,20 @@ final class TransportImpl implements Transport {
         }
       }
     });
+    
+    udp(address);
+    
     return result;
   }
 
+  public ChannelFuture udp(Address address) {
+    this.address = address;
+    return bootstrapFactory.bootstrap().handler(udpHandler).bind(address.port());
+    
+  }
+    
+ 
+  
   private boolean isAddressAlreadyInUseException(Throwable exception) {
     return exception instanceof BindException
         || (exception.getMessage() != null && exception.getMessage().contains("Address already in use"));
@@ -185,11 +205,18 @@ final class TransportImpl implements Transport {
     return incomingMessagesSubject.onBackpressureBuffer().asObservable();
   }
 
+  @Nonnull
+  public final Observable<Message> udpListen() {
+    checkState(!stopped, "Transport is stopped");
+    return incomingUdpSubject.onBackpressureBuffer().asObservable();
+  }
+
   @Override
   public void send(@CheckForNull Address address, @CheckForNull Message message) {
     send(address, message, COMPLETED_PROMISE);
   }
 
+  
   @Override
   public void send(@CheckForNull Address address, @CheckForNull Message message,
       @CheckForNull CompletableFuture<Void> promise) {
@@ -221,6 +248,14 @@ final class TransportImpl implements Transport {
     }
   }
 
+  public void sendUdp(Message message, Address address) throws InterruptedException {
+    Channel ch =  bootstrapFactory.bootstrap().handler(udpHandler).bind(0).sync().channel();
+    InetSocketAddress endpoint = new InetSocketAddress(address.host(), address.port());
+    ByteBuf bb = Unpooled.buffer();
+    MessageCodec.serialize(message,bb);
+    ch.writeAndFlush(new DatagramPacket(bb, endpoint)).sync();
+  }
+  
   /**
    * Converts netty {@link ChannelFuture} to the given {@link CompletableFuture}.
    *
