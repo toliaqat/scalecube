@@ -9,11 +9,11 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Locale;
 
-public class EpolltUtils {
+public class EpollUtils {
 
   private static boolean envSupportEpoll;
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(EpolltUtils.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(EpollUtils.class);
   
   static {
     String name = SystemPropertyUtil.get("os.name").toLowerCase(Locale.UK).trim();

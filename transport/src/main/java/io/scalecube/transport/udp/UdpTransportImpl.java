@@ -195,7 +195,7 @@ public class UdpTransportImpl implements Transport {
   }
 
   private boolean isEpollSupported() {
-    return EpolltUtils.isEpollSuported() && config.isEnableEpoll();
+    return EpollUtils.isEpollSuported() && config.isEnableEpoll();
   }
 
 }
