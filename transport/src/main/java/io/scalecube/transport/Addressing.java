@@ -22,7 +22,7 @@ import java.util.NoSuchElementException;
  * @author Anton Kharenko
  * @author Artem Vysochyn
  */
-final class Addressing {
+public final class Addressing {
 
   /**
    * The minimum server port number. Set at 1100 to avoid returning privileged port numbers.

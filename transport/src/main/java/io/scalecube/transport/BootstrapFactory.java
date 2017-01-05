@@ -13,6 +13,7 @@ import io.netty.channel.epoll.EpollSocketChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.ServerSocketChannel;
 import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.concurrent.DefaultThreadFactory;
@@ -21,10 +22,11 @@ import io.netty.util.internal.SystemPropertyUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.channels.DatagramChannel;
 import java.util.Locale;
 import java.util.concurrent.ThreadFactory;
 
-final class BootstrapFactory {
+public final class BootstrapFactory {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(BootstrapFactory.class);
 
@@ -82,6 +84,13 @@ final class BootstrapFactory {
     return bootstrap;
   }
 
+  public Bootstrap bootstrap() {
+    Bootstrap bootstrap = new Bootstrap();
+    bootstrap.group(workerGroup);
+    return bootstrap;
+  }
+
+  
   /**
    * @return {@link EpollEventLoopGroup} or {@link NioEventLoopGroup} object dep on {@link #isEpollSupported()} call.
    */
@@ -112,4 +121,5 @@ final class BootstrapFactory {
     this.workerGroup.shutdownGracefully();
   }
 
+  
 }
