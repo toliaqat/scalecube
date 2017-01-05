@@ -103,7 +103,7 @@ public class UdpTransportImpl implements Transport {
   @Override
   public void stop() {
     this.stopped = true;
-    for(Channel ch : udpChannels.values()){
+    for (Channel ch : udpChannels.values()) {
       ch.close();
     }
     udpChannels.clear();
@@ -112,7 +112,7 @@ public class UdpTransportImpl implements Transport {
   @Override
   public void stop(CompletableFuture<Void> promise) {
     this.stopped = true;
-    for(Channel ch : udpChannels.values()){
+    for (Channel ch : udpChannels.values()) {
       ch.close();
     }
     udpChannels.clear();
@@ -133,9 +133,11 @@ public class UdpTransportImpl implements Transport {
   public void send(Address address, Message message, CompletableFuture<Void> promise) {
     checkState(!this.stopped, "UDP transport is stopped");
     InetSocketAddress endpoint = new InetSocketAddress(address.host(), address.port());
-    
+
     Channel channel = udpChannels.computeIfAbsent(address, addr -> connect(endpoint));
 
+    message.setSender(this.address);
+    
     ByteBuf bb = Unpooled.buffer();
     MessageCodec.serialize(message, bb);
 
@@ -162,7 +164,7 @@ public class UdpTransportImpl implements Transport {
             promise.completeExceptionally(channelFuture.cause());
           }
         });
-    
+
     try {
       return promise.get();
     } catch (InterruptedException | ExecutionException e) {

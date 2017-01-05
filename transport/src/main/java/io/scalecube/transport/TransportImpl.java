@@ -3,6 +3,8 @@ package io.scalecube.transport;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 
+import io.scalecube.transport.udp.UdpTransportImpl;
+
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
@@ -64,6 +66,7 @@ final class TransportImpl implements Transport {
   private ServerChannel serverChannel;
 
   private volatile boolean stopped = false;
+  private UdpTransportImpl udp;
 
   public TransportImpl(TransportConfig config) {
     checkArgument(config != null);
@@ -113,6 +116,11 @@ final class TransportImpl implements Transport {
         }
       }
     });
+    UdpTransportImpl udp = new UdpTransportImpl(config);
+    udp.bind(address);
+    
+    this.udp = udp;
+    
     return result;
   }
 
@@ -293,5 +301,10 @@ final class TransportImpl implements Transport {
       }
       pipeline.addLast(exceptionHandler);
     }
+  }
+
+  @Override
+  public Transport udp() {
+    return this.udp;
   }
 }

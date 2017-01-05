@@ -14,6 +14,8 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface Transport {
 
+  public Transport udp();
+  
   /**
    * Init transport with the default configuration synchronously. Starts to accept connections on local address.
    */

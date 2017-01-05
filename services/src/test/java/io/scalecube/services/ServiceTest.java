@@ -584,7 +584,7 @@ public class ServiceTest extends BaseTest {
 
     // Init params
     int warmUpCount = 1_000;
-    int count = 10_000;
+    int count = 1000_000;
     CountDownLatch warmUpLatch = new CountDownLatch(warmUpCount);
 
     // Warm up
@@ -611,7 +611,7 @@ public class ServiceTest extends BaseTest {
       });
     }
     System.out.println("Finished sending " + count + " messages in " + (System.currentTimeMillis() - startTime));
-    countLatch.await(60, TimeUnit.SECONDS);
+    countLatch.await(160, TimeUnit.SECONDS);
     System.out.println("Finished receiving " + count + " messages in " + (System.currentTimeMillis() - startTime));
     assertTrue(countLatch.getCount() == 0);
     provider.cluster().shutdown();

@@ -73,14 +73,15 @@ final class ClusterImpl implements Cluster {
 
   public CompletableFuture<Cluster> join0() {
     CompletableFuture<Transport> transportFuture = Transport.bind(config.getTransportConfig());
+    
     CompletableFuture<Void> clusterFuture = transportFuture.thenCompose(boundTransport -> {
       transport = boundTransport;
       messageObservable = transport.listen()
           .filter(msg -> !SYSTEM_MESSAGES.contains(msg.qualifier())); // filter out system gossips
 
-      membership = new MembershipProtocol(transport, config);
-      gossip = new GossipProtocol(transport, membership, config);
-      failureDetector = new FailureDetector(transport, membership, config);
+      membership = new MembershipProtocol(transport.udp(), config);
+      gossip = new GossipProtocol(transport.udp(), membership, config);
+      failureDetector = new FailureDetector(transport.udp(), membership, config);
       membership.setFailureDetector(failureDetector);
       membership.setGossipProtocol(gossip);
 
