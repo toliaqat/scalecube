@@ -84,7 +84,7 @@ public final class FailureDetector implements IFailureDetector {
     checkArgument(transport != null);
     checkArgument(membership != null);
     checkArgument(config != null);
-    this.transport = transport.udp();
+    this.transport = transport;
     this.membership = membership;
     this.config = config;
     String nameFormat = "sc-fdetector-" + transport.address().toString();
