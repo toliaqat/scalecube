@@ -14,7 +14,7 @@ public class EpollUtils {
   private static boolean envSupportEpoll;
 
   private static final Logger LOGGER = LoggerFactory.getLogger(EpollUtils.class);
-  
+
   static {
     String name = SystemPropertyUtil.get("os.name").toLowerCase(Locale.UK).trim();
     if (!name.contains("linux")) {
@@ -33,8 +33,8 @@ public class EpollUtils {
       }
     }
   }
-  
-  public static boolean isEpollSuported(){
+
+  public static boolean isEpollSuported() {
     return envSupportEpoll;
   }
 }

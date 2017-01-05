@@ -137,7 +137,7 @@ public class UdpTransportImpl implements Transport {
     Channel channel = udpChannels.computeIfAbsent(address, addr -> connect(endpoint));
 
     message.setSender(this.address);
-    
+
     ByteBuf bb = Unpooled.buffer();
     MessageCodec.serialize(message, bb);
 
