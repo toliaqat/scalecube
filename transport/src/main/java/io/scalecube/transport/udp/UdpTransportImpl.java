@@ -69,13 +69,12 @@ public class UdpTransportImpl implements Transport {
   /**
    * bind the transport to a specific udp address.
    * @param address to bind and listen.
-   * @return UDP transport instance.
+   * @return UDP transport.
    */
   public CompletableFuture<Transport> bind(Address address) {
     final CompletableFuture<Transport> result = new CompletableFuture<>();
 
-    // Listen address
-    this.address = address;
+    this.address = address; // Listen address
 
     ChannelFuture channel = bootstrap.channel(NioDatagramChannel.class)
         .option(ChannelOption.SO_REUSEADDR, true)

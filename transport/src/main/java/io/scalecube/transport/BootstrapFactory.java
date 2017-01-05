@@ -74,6 +74,10 @@ public final class BootstrapFactory {
     return bootstrap;
   }
 
+  /**
+   * create netty client bootstrap.
+   * @return client bootstrap.
+   */
   public Bootstrap clientBootstrap() {
     Bootstrap bootstrap = new Bootstrap();
     bootstrap.group(workerGroup)
