@@ -13,7 +13,6 @@ import io.netty.channel.epoll.EpollSocketChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.ServerSocketChannel;
 import io.netty.channel.socket.SocketChannel;
-import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.concurrent.DefaultThreadFactory;
@@ -22,7 +21,6 @@ import io.netty.util.internal.SystemPropertyUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.channels.DatagramChannel;
 import java.util.Locale;
 import java.util.concurrent.ThreadFactory;
 
@@ -61,6 +59,10 @@ public final class BootstrapFactory {
     this.workerGroup = createEventLoopGroup(config.getWorkerThreads(), new DefaultThreadFactory("sc-io", true));
   }
 
+  /**
+   * creates netty server bootstrap.
+   * @return server bootstrap.
+   */
   public ServerBootstrap serverBootstrap() {
     ServerBootstrap bootstrap = new ServerBootstrap();
     bootstrap.group(bossGroup, workerGroup)

@@ -66,6 +66,11 @@ public class UdpTransportImpl implements Transport {
     this.config = config;
   }
 
+  /**
+   * bind the transport to a specific udp address.
+   * @param address to bind and listen.
+   * @return UDP transport instance.
+   */
   public CompletableFuture<Transport> bind(Address address) {
     final CompletableFuture<Transport> result = new CompletableFuture<>();
 
