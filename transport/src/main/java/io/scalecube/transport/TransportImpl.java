@@ -116,6 +116,7 @@ final class TransportImpl implements Transport {
         }
       }
     });
+    
     UdpTransportImpl udp = new UdpTransportImpl(config);
     udp.bind(address);
     

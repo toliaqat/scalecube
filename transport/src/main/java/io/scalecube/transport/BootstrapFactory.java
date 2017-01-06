@@ -89,13 +89,6 @@ public final class BootstrapFactory {
         .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
     return bootstrap;
   }
-
-  public Bootstrap bootstrap() {
-    Bootstrap bootstrap = new Bootstrap();
-    bootstrap.group(workerGroup);
-    return bootstrap;
-  }
-
   
   /**
    * @return {@link EpollEventLoopGroup} or {@link NioEventLoopGroup} object dep on {@link #isEpollSupported()} call.

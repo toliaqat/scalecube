@@ -20,6 +20,8 @@ import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.FixedRecvByteBufAllocator;
+import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.epoll.EpollEventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.DatagramChannel;
@@ -35,6 +37,7 @@ import rx.subjects.PublishSubject;
 import rx.subjects.Subject;
 
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -52,13 +55,11 @@ public class UdpTransportImpl implements Transport {
   private boolean stopped;
   private Address address;
 
-  private ChannelFuture channelFuture;
-
   private final EventLoopGroup group;
 
   private TransportConfig config;
 
-  private ConcurrentMap<Address, Channel> udpChannels = new ConcurrentHashMap<>();
+  NettyUDPClient client;
 
   public UdpTransportImpl(TransportConfig config) {
     this.udpHandler = new UdpHandler(incomingMessageSubject);
@@ -68,6 +69,7 @@ public class UdpTransportImpl implements Transport {
 
   /**
    * bind the transport to a specific udp address.
+   * 
    * @param address to bind and listen.
    * @return UDP transport.
    */
@@ -76,9 +78,11 @@ public class UdpTransportImpl implements Transport {
 
     this.address = address; // Listen address
 
-    ChannelFuture channel = bootstrap.channel(NioDatagramChannel.class)
+    bootstrap.channel(NioDatagramChannel.class)
         .option(ChannelOption.SO_REUSEADDR, true)
         .option(ChannelOption.SO_BROADCAST, true)
+        .option(ChannelOption.SO_RCVBUF, 2048 * 2)
+        .option(ChannelOption.SO_SNDBUF, 2048 * 2)
         .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
         .group(group)
         // .handler(udpHandler)
@@ -95,7 +99,17 @@ public class UdpTransportImpl implements Transport {
           }
         });
 
-    this.channelFuture = channel;
+    try {
+      client = new NettyUDPClient(new ChannelInitializer<DatagramChannel>() {
+        @Override
+        protected void initChannel(DatagramChannel ch) throws Exception {
+        }
+      }, group);
+    } catch (Exception e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
+
     return result;
   }
 
@@ -107,19 +121,11 @@ public class UdpTransportImpl implements Transport {
   @Override
   public void stop() {
     this.stopped = true;
-    for (Channel ch : udpChannels.values()) {
-      ch.close();
-    }
-    udpChannels.clear();
   }
 
   @Override
   public void stop(CompletableFuture<Void> promise) {
     this.stopped = true;
-    for (Channel ch : udpChannels.values()) {
-      ch.close();
-    }
-    udpChannels.clear();
   }
 
   @Override
@@ -134,47 +140,33 @@ public class UdpTransportImpl implements Transport {
   }
 
   @Override
-  public void send(Address address, Message message, CompletableFuture<Void> promise) {
+  public void send(Address target, Message message, CompletableFuture<Void> promise) {
     checkState(!this.stopped, "UDP transport is stopped");
-    InetSocketAddress endpoint = new InetSocketAddress(address.host(), address.port());
-
-    Channel channel = udpChannels.computeIfAbsent(address, addr -> connect(endpoint));
+    checkState(target != null, "address is null");
+    checkState(message != null, "message is null");
 
     message.setSender(this.address);
 
     ByteBuf bb = Unpooled.buffer();
     MessageCodec.serialize(message, bb);
 
-    channel.writeAndFlush(new DatagramPacket(bb, endpoint))
-        .addListener((ChannelFuture channelFuture) -> {
-          if (channelFuture.isSuccess()) {
-            promise.complete(null);
-          } else {
-            promise.completeExceptionally(channelFuture.cause());
-          }
-        });
+    DatagramChannel channel = getChannel(target);
+    if (channel != null)
+      channel.write(bb);
+
   }
 
-
-
-  private Channel connect(InetSocketAddress endpoint) {
-    CompletableFuture<Channel> promise = new CompletableFuture<>();
-
-    channelFuture.channel().connect(endpoint)
-        .addListener((ChannelFuture channelFuture) -> {
-          if (channelFuture.isSuccess()) {
-            promise.complete(channelFuture.channel());
-          } else {
-            promise.completeExceptionally(channelFuture.cause());
-          }
-        });
-
+  private DatagramChannel getChannel(Address target) {
     try {
-      return promise.get();
-    } catch (InterruptedException | ExecutionException e) {
+      return client.createChannel(target);
+    } catch (UnknownHostException | InterruptedException e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
       return null;
     }
   }
+
+
 
   @Override
   public Observable<Message> listen() {

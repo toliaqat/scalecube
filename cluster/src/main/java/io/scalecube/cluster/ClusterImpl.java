@@ -79,9 +79,9 @@ final class ClusterImpl implements Cluster {
       messageObservable = transport.listen()
           .filter(msg -> !SYSTEM_MESSAGES.contains(msg.qualifier())); // filter out system gossips
 
-      membership = new MembershipProtocol(transport.udp(), config);
+      membership = new MembershipProtocol(transport, config);
       gossip = new GossipProtocol(transport.udp(), membership, config);
-      failureDetector = new FailureDetector(transport.udp(), membership, config);
+      failureDetector = new FailureDetector(transport, membership, config);
       membership.setFailureDetector(failureDetector);
       membership.setGossipProtocol(gossip);
 
