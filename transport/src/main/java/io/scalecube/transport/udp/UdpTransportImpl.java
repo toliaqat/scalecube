@@ -149,7 +149,7 @@ public class UdpTransportImpl implements Transport {
 
     ByteBuf bb = Unpooled.buffer();
     MessageCodec.serialize(message, bb);
-
+    System.out.println(message);
     DatagramChannel channel = getChannel(target);
     if (channel != null)
       channel.write(bb);
