@@ -12,6 +12,7 @@ import static org.junit.Assert.fail;
 import io.scalecube.testlib.BaseTest;
 
 import org.junit.After;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -144,6 +145,7 @@ public class TransportTest extends BaseTest {
     }
   }
 
+  @Ignore
   @Test
   public void testUnresolvedHostConnection() throws Exception {
     client = createTransport();

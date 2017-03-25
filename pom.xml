@@ -78,6 +78,8 @@
         <module>benchmark</module>
         <module>examples</module>
         <module>services</module>
+        <module>raft-leader-election</module>
+        <module>raft-leader-election-api</module>
     </modules>
 
     <dependencyManagement>
