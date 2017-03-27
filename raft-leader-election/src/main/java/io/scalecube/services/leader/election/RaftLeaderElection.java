@@ -79,8 +79,7 @@ public class RaftLeaderElection implements LeaderElectionService {
     this.microservices = seed;
     this.candidateId = microservices.cluster().member().id();
     this.dispatcher = microservices.dispatcher().create();
-    this.stateMachine.transition(State.FOLLOWER, currentTerm.get());
-    
+    this.stateMachine.transition(State.FOLLOWER, currentTerm.get()); 
   }
   
   private Consumer onHeartbeatNotRecived() {
@@ -93,10 +92,15 @@ public class RaftLeaderElection implements LeaderElectionService {
 
   @Override
   public CompletableFuture<HeartbeatResponse> onHeartbeat(HeartbeatRequest request) {
-    System.out.println("Recived Heartbeat from: " +  request.memberId());
+    
     this.timeoutScheduler.reset(this.timeout);
     
     LogicalTimestamp term = LogicalTimestamp.fromBytes(request.term());
+    //System.out.println("Recived Heartbeat from: " +  request.memberId() + " term: " + term + " current-term: " +  currentTerm.get());
+    
+    if(currentTerm.get().isBefore(term)) {
+      currentTerm.set(term);
+    }
     stateMachine.transition(State.FOLLOWER, term);
     return CompletableFuture.completedFuture(new HeartbeatResponse(currentTerm.get().toBytes()));
   }
@@ -106,6 +110,8 @@ public class RaftLeaderElection implements LeaderElectionService {
     LogicalTimestamp term = LogicalTimestamp.fromBytes(request.term());
     
     boolean voteGranted = currentTerm.get().isBefore(term);
+    
+    System.out.println("request vote" + currentTerm.get() + " vote granted " + voteGranted);
     
     if(currentTerm.get().isBefore(term)){
       currentTerm.set(term);
@@ -125,11 +131,10 @@ public class RaftLeaderElection implements LeaderElectionService {
   private Consumer sendHeartbeat() {
 
     return heartbeat -> {
-      System.out.println("Sending Heartbeat from: " +  this.candidateId);
+      //System.out.println("Sending Heartbeat from: " +  this.candidateId);
       List<ServiceInstance> services = findPeersServiceInstances();
       services.forEach(instance -> {
-        if (LeaderElectionService.SERVICE_NAME.equals(instance.serviceName())
-            && !instance.isLocal()) {
+        if (LeaderElectionService.SERVICE_NAME.equals(instance.serviceName()) && !instance.isLocal()) {
 
           try {
             dispatcher.invoke(composeRequest("heartbeat",
@@ -138,6 +143,7 @@ public class RaftLeaderElection implements LeaderElectionService {
                   HeartbeatResponse response = success.data();
                   if (currentTerm.get().isBefore(LogicalTimestamp.fromBytes(response.term()))) {
                     currentTerm.set(LogicalTimestamp.fromBytes(response.term()));
+                    System.out.println(currentTerm.get());
                   }
                 });
           } catch (Exception e) {
@@ -151,10 +157,11 @@ public class RaftLeaderElection implements LeaderElectionService {
 
   private void sendElectionCampaign() {
     List<ServiceInstance> services = findPeersServiceInstances();
-    CountDownLatch voteLatch = new CountDownLatch(((1 + services.size()) / 2));
+    CountDownLatch voteLatch = new CountDownLatch((services.size() / 2) + 1);
 
     services.forEach(instance -> {
       try {
+        System.out.println(candidateId +  " send vote current term" + currentTerm.get() + " to node " + instance.memberId());
         dispatcher.invoke(composeRequest("vote", new VoteRequest(
             currentTerm.get().toBytes(),
             candidateId)), instance).whenComplete((success, error) -> {
