@@ -16,6 +16,7 @@ import io.scalecube.transport.TransportConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.HashMap;
@@ -188,8 +189,26 @@ public class Microservices {
         // create cluster and transport with given config.
         sender = new TransportServiceCommunicator(Transport.bindAwait(transportConfig));
       }
+      
+      Microservices ms = new Microservices(cluster, sender, servicesConfig);
+      servicesConfig.services().forEach((action)->{
+        inject(action.getService(),ms);
+      });
+      return ms;
+    }
 
-      return new Microservices(cluster, sender, servicesConfig);
+
+    private void inject(Object service, Microservices ms) {
+      for(Field field : service.getClass().getDeclaredFields()){
+        field.setAccessible(true);
+        if(field.getType().equals(Microservices.class)){
+          try {
+            field.set(service, ms);
+          } catch (Exception e) {
+            e.printStackTrace();
+          } 
+        }
+      }
     }
 
 

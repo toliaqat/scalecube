@@ -1,47 +1,40 @@
 package io.scalecube.services.leader.election;
 
-import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
-public class HeartbeatScheduler {
+public class JobScheduler {
 
   private AtomicReference<ScheduledExecutorService> executor = new AtomicReference<ScheduledExecutorService>(null);
 
   private final Consumer callable;
 
-  private int timeout = 10_000;
-
-  private final Random rmd = new Random();
-
-  public HeartbeatScheduler(final Consumer callable, int timeout) {
+  public JobScheduler(final Consumer callable) {
     this.callable = callable;
-    if (timeout > 3000) {
-      this.timeout = timeout;
-    }
-    this.timeout = rmd.nextInt(timeout - (timeout / 2)) + (timeout / 2);
   }
 
-  public void start() {
-    if (executor.get() == null || executor.get().isShutdown() || executor.get().isTerminated()){
+  public void start(int interval) {
+    if (executor.get() == null || executor.get().isShutdown() || executor.get().isTerminated()) {
       this.executor.set(Executors.newScheduledThreadPool(1));
     }
-    
-    
+
     executor.get().scheduleAtFixedRate(() -> {
       callable.accept(Void.TYPE);
-    }, timeout, timeout, TimeUnit.MILLISECONDS);
+    }, interval, interval, TimeUnit.MILLISECONDS);
   }
 
   public void stop() {
-    executor.get().shutdown();
+    
+    if (executor.get() != null && (!executor.get().isShutdown() || !executor.get().isTerminated())) {
+      executor.get().shutdown();
+    }
   }
 
-  public void reset() {
+  public void reset(int interval) {
     stop();
-    start();
+    start(interval);
   }
 }

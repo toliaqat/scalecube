@@ -16,68 +16,106 @@ import io.scalecube.services.leader.election.state.State;
 import io.scalecube.services.leader.election.state.StateMachine;
 import io.scalecube.transport.Message;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 public class RaftLeaderElection implements LeaderElectionService {
 
-  private State state = State.FOLLOWER;
-
   private final StateMachine stateMachine;
 
-  private final Microservices microservices;
+  private Microservices microservices;
 
   private final LogicalClock clock = new LogicalClock();
 
   private final AtomicReference<LogicalTimestamp> currentTerm = new AtomicReference<LogicalTimestamp>();
 
-  private final HeartbeatScheduler scheduler;
+  private final JobScheduler timeoutScheduler;
 
-  private final ServiceCall dispatcher;
+  private final JobScheduler heartbeatScheduler;
 
-  private final String candidateId;
+  private ServiceCall dispatcher;
 
-  public RaftLeaderElection(Microservices microservices) {
-    this.microservices = microservices;
-    this.microservices.proxy().api(RaftLeaderElection.class).create();
-    this.stateMachine = initStateMachine();
+  private String candidateId;
+
+  private final int timeout;
+
+  private final Config config;
+
+  public RaftLeaderElection(Config config) {
+    this.config = config;
+    this.timeout = new Random().nextInt(config.timeout() - (config.timeout() / 2)) + (config.timeout() / 2);
+    
+    this.stateMachine = StateMachine.builder()
+        .init(State.INACTIVE)
+        .addTransition(State.INACTIVE, State.FOLLOWER)
+        .addTransition(State.FOLLOWER, State.CANDIDATE)
+        .addTransition(State.CANDIDATE, State.LEADER)
+        .addTransition(State.LEADER, State.FOLLOWER)
+        .build();
+
+    this.stateMachine.on(State.FOLLOWER, becomeFollower());
+    this.stateMachine.on(State.CANDIDATE, becomeCandidate());
+    this.stateMachine.on(State.LEADER, becomeLeader());
+
     this.currentTerm.set(clock.tick());
-    this.scheduler = new HeartbeatScheduler(sendHeartbeat(), 10);
-    this.dispatcher = microservices.dispatcher().create();
-    this.candidateId = microservices.cluster().member().id();
+    this.timeoutScheduler = new JobScheduler(onHeartbeatNotRecived());
+    this.heartbeatScheduler = new JobScheduler(sendHeartbeat());
   }
-
-  @Override
-  public CompletableFuture<HeartbeatResponse> onHeartbeat(HeartbeatRequest request) {
-
-    scheduler.reset();
-
-    LogicalTimestamp term = LogicalTimestamp.fromBytes(request.term());
-    if (term.isAfter(currentTerm.get())) {
-      currentTerm.set(term);
-      stateMachine.transition(State.FOLLOWER, term);
-    }
-    return null;
-  }
-
-  @Override
-  public CompletableFuture<VoteResponse> onRequestVote(VoteRequest request) {
-    LogicalTimestamp term = LogicalTimestamp.fromBytes(request.term());
-    return CompletableFuture.completedFuture(
-        new VoteResponse(currentTerm.get().isBefore(term)));
-  }
-
+  
   @Override
   public CompletableFuture<Leader> leader() {
 
     return null;
   }
 
+  
+  public void start(Microservices seed) {
+    this.microservices = seed;
+    this.candidateId = microservices.cluster().member().id();
+    this.dispatcher = microservices.dispatcher().create();
+    this.stateMachine.transition(State.FOLLOWER, currentTerm.get());
+    
+  }
+  
+  private Consumer onHeartbeatNotRecived() {
+    return toCandidate -> {
+      this.timeoutScheduler.stop();
+      this.currentTerm.set(clock.tick(currentTerm.get()));
+      this.stateMachine.transition(State.CANDIDATE, currentTerm.get());
+    };
+  }
+
+  @Override
+  public CompletableFuture<HeartbeatResponse> onHeartbeat(HeartbeatRequest request) {
+    System.out.println("Recived Heartbeat from: " +  request.memberId());
+    this.timeoutScheduler.reset(this.timeout);
+    
+    LogicalTimestamp term = LogicalTimestamp.fromBytes(request.term());
+    stateMachine.transition(State.FOLLOWER, term);
+    return CompletableFuture.completedFuture(new HeartbeatResponse(currentTerm.get().toBytes()));
+  }
+
+  @Override
+  public CompletableFuture<VoteResponse> onRequestVote(VoteRequest request) {
+    LogicalTimestamp term = LogicalTimestamp.fromBytes(request.term());
+    
+    boolean voteGranted = currentTerm.get().isBefore(term);
+    
+    if(currentTerm.get().isBefore(term)){
+      currentTerm.set(term);
+    }
+    
+    return CompletableFuture.completedFuture(
+        new VoteResponse(voteGranted));
+  }
+
+  
 
   /**
    * find all leader election services that are remote and send current term to all of them.
@@ -86,16 +124,22 @@ public class RaftLeaderElection implements LeaderElectionService {
    */
   private Consumer sendHeartbeat() {
 
-    List<ServiceInstance> services = findPeers();
-
     return heartbeat -> {
+      System.out.println("Sending Heartbeat from: " +  this.candidateId);
+      List<ServiceInstance> services = findPeersServiceInstances();
       services.forEach(instance -> {
         if (LeaderElectionService.SERVICE_NAME.equals(instance.serviceName())
             && !instance.isLocal()) {
 
           try {
             dispatcher.invoke(composeRequest("heartbeat",
-                new HeartbeatRequest(currentTerm.get().toBytes())), instance);
+                new HeartbeatRequest(currentTerm.get().toBytes(),this.candidateId)), instance)
+                .whenComplete((success, error) -> {
+                  HeartbeatResponse response = success.data();
+                  if (currentTerm.get().isBefore(LogicalTimestamp.fromBytes(response.term()))) {
+                    currentTerm.set(LogicalTimestamp.fromBytes(response.term()));
+                  }
+                });
           } catch (Exception e) {
             // TODO Auto-generated catch block
             e.printStackTrace();
@@ -106,7 +150,7 @@ public class RaftLeaderElection implements LeaderElectionService {
   }
 
   private void sendElectionCampaign() {
-    List<ServiceInstance> services = findPeers();
+    List<ServiceInstance> services = findPeersServiceInstances();
     CountDownLatch voteLatch = new CountDownLatch(((1 + services.size()) / 2));
 
     services.forEach(instance -> {
@@ -133,31 +177,16 @@ public class RaftLeaderElection implements LeaderElectionService {
     }
   }
 
-
-
-  private StateMachine initStateMachine() {
-
-    StateMachine sm = StateMachine.builder()
-        .init(State.FOLLOWER)
-        .addTransition(State.INACTIVE, State.CANDIDATE)
-        .addTransition(State.INACTIVE, State.LEADER)
-        .build();
-
-    sm.on(State.FOLLOWER, becomeFollower());
-    sm.on(State.CANDIDATE, becomeCandidate());
-    sm.on(State.LEADER, becomeLeader());
-
-    return sm;
-
-  }
-
   /**
    * node becomes leader when most of the peers granted a vote on election process.
+   * 
    * @return
    */
   private Consumer becomeLeader() {
-    return leader-> {
-      scheduler.start();
+    return leader -> {
+      System.out.println(this.microservices.cluster().member().id() + " became leader");
+      timeoutScheduler.stop();
+      heartbeatScheduler.start(config.heartbeatInterval());
     };
   }
 
@@ -170,7 +199,8 @@ public class RaftLeaderElection implements LeaderElectionService {
    */
   private Consumer becomeCandidate() {
     return election -> {
-      scheduler.stop();
+      System.out.println(this.microservices.cluster().member().id() + " became Candidate");
+      heartbeatScheduler.stop();
       currentTerm.set(clock.tick());
       sendElectionCampaign();
     };
@@ -178,11 +208,14 @@ public class RaftLeaderElection implements LeaderElectionService {
 
   /**
    * node became follower when it initiates
+   * 
    * @return
    */
   private Consumer becomeFollower() {
     return follower -> {
-      scheduler.stop();
+      System.out.println(this.microservices.cluster().member().id() + " became Follower");
+      heartbeatScheduler.stop();
+      timeoutScheduler.start(this.timeout);
     };
   }
 
@@ -195,10 +228,16 @@ public class RaftLeaderElection implements LeaderElectionService {
         .data(data).build();
   }
 
-  private List<ServiceInstance> findPeers() {
-    return this.microservices.services().stream()
-        .filter(instance -> LeaderElectionService.SERVICE_NAME.equals(instance.serviceName())
-            && !instance.isLocal())
-        .collect(Collectors.toList());
+  private List<ServiceInstance> findPeersServiceInstances() {
+    List<ServiceInstance> list = new ArrayList<>();
+    this.microservices.services().forEach( instance-> {
+      if(LeaderElectionService.SERVICE_NAME.equals(instance.serviceName()) && !instance.isLocal()){
+        list.add(instance);
+      }      
+    });
+   
+    return list;
   }
+
+ 
 }

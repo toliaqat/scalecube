@@ -6,13 +6,13 @@ public class HeartbeatSchedulerTest {
 
   @Test
   public void testHeartbeatScheduler() {
-   HeartbeatScheduler scheduler = new HeartbeatScheduler(a->{
+   JobScheduler scheduler = new JobScheduler(a->{
      System.out.println("executed");
-   },10_000);
+   });
    
    
-   scheduler.start();
-   scheduler.reset();
+   scheduler.start(3000);
+   scheduler.reset(3000);
    System.out.println("STARTED");
    
    scheduler.stop();

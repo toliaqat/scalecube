@@ -3,14 +3,20 @@ package io.scalecube.services.leader.election.api;
 
 public class HeartbeatRequest {
 
-  private byte[] term;
+  private final byte[] term;
+  private final String memberId;
 
-  public HeartbeatRequest(byte[] term) {
+  public HeartbeatRequest(byte[] term, String memberId) {
     this.term = term;
+    this.memberId = memberId;
   }
 
   public byte[] term() {
     return term;
+  }
+
+  public String memberId() {
+    return memberId;
   }
   
 }
