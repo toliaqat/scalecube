@@ -25,5 +25,7 @@ public interface ServiceRegistry {
   Optional<ServiceDefinition> getServiceDefinition(String serviceName);
 
   ServiceDefinition registerInterface(Class<?> serviceInterface);
+
+  public Collection<ServiceReference> serviceReferences();
   
 }

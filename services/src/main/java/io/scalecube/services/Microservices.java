@@ -373,4 +373,9 @@ public class Microservices {
   public CompletableFuture<Void> shutdown() {
     return this.cluster.shutdown();
   }
+
+
+  public ServiceRegistry serviceRegistry() {
+    return this.serviceRegistry;
+  }
 }

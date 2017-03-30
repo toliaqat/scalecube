@@ -189,4 +189,9 @@ public class ServiceRegistryImpl implements ServiceRegistry {
     return serviceDefinition;
   }
 
+  @Override
+  public Collection<ServiceReference> serviceReferences() {
+    return Collections.unmodifiableCollection(serviceInstances.keySet());
+  }
+
 }
